@@ -35,7 +35,8 @@ mongoose.connect("mongodb://localhost:27017/userDB");
 const userSchems = new mongoose.Schema({
     email: String,
     password: String,
-    googleId: String
+    googleId: String,
+    secret: String
 });
 
 ////////3 this
@@ -97,11 +98,42 @@ app.get("/register", (req, res)=>{
 });
 
 app.get("/secrets", (req, res)=>{
+    User.find({"secret": {$ne: null}})
+        .then((foundUsers)=>{
+            if(foundUsers){
+                res.render("secrets", {usersWithSecrets: foundUsers});
+            }
+        })
+        .catch((err)=>{
+            console.log(err);
+        });
+});
+
+app.get("/submit", (req, res)=>{
     if(req.isAuthenticated()){
-        res.render("secrets");
+        res.render("submit");
     } else{
-        res.render("login");
+        res.redirect("/login");
     }
+});
+
+app.post("/submit", (req, res)=>{
+    const submittedSecret = req.body.secret;
+
+    console.log(req.user);
+    User.findById(req.user)
+        .then((foundUser)=>{
+            if(foundUser){
+                foundUser.secret = submittedSecret;
+                foundUser.save()
+                    .then(()=>{
+                        res.redirect("/secrets");
+                    });
+            }
+        })
+        .catch((err)=>{
+            console.log(err);
+        });
 });
 
 app.get("/logout", (req, res)=>{
