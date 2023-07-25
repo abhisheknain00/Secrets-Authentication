@@ -7,6 +7,8 @@ const mongoose = require("mongoose");
 const session = require('express-session');
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require('mongoose-findorcreate');
 
 const app = express();
 
@@ -32,11 +34,13 @@ mongoose.connect("mongodb://localhost:27017/userDB");
 
 const userSchems = new mongoose.Schema({
     email: String,
-    password: String
+    password: String,
+    googleId: String
 });
 
 ////////3 this
 userSchems.plugin(passportLocalMongoose);
+userSchems.plugin(findOrCreate);
 
 
 const User = new mongoose.model("User", userSchems);
@@ -44,8 +48,41 @@ const User = new mongoose.model("User", userSchems);
 ////////4
 passport.use(User.createStrategy());
 
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+//serialize and deserialize with any authentication, not just local
+passport.serializeUser(function(user, done){
+    done(null, user);
+});
+
+passport.deserializeUser(function(user, done){
+    done(null, user);
+});
+
+
+//OAuth
+passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
+
+//"google"->strategy
+app.get("/auth/google", 
+    passport.authenticate('google', { scope: ['profile']}
+));
+
+app.get('/auth/google/secrets', 
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect to secrets.
+    res.redirect('/secrets');
+});
 
 app.get("/", (req, res)=>{
     res.render("home");
@@ -93,7 +130,10 @@ app.post("/register", (req, res)=>{
 });
 
 
-app.post("/login", passport.authenticate("local", {failureRedirect: "/login"}), function(req, res){
+app.post("/login", 
+    passport.authenticate("local", {failureRedirect: "/login"}), 
+    function(req, res){
+    
     res.redirect("/secrets");
 });
 
